@@ -1,8 +1,10 @@
+using AspNetCore.Authentication.Basic;
 using Microsoft.AspNetCore.Authorization;
 using Quartz;
 using QuartzPlayground;
 using SilkierQuartz;
 using SilkierQuartz.Authorization;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
@@ -30,26 +32,65 @@ services.AddQuartzHostedService(options =>
     options.WaitForJobsToComplete = true;
 });
 
-services.AddSingleton(new SilkierQuartzOptions { VirtualPathRoot = string.Empty, UseLocalTime = true });
-services.AddSingleton(new SilkierQuartzAuthenticationOptions { AccessRequirement = SilkierQuartzAuthenticationOptions.SimpleAccessRequirement.AllowAnonymous });
-services.AddAuthorization(
-    (Action<AuthorizationOptions>)(opts => opts.AddPolicy(
-                                          "SilkierQuartz",
-                                          (Action<AuthorizationPolicyBuilder>)(builder => builder.AddRequirements(
-                                                                                      new SilkierQuartzDefaultAuthorizationRequirement(
-                                                                                          SilkierQuartzAuthenticationOptions.SimpleAccessRequirement.AllowAnonymous))))));
+services
+    .AddAuthentication("BasicAuthentication")
+    .AddBasic("BasicAuthentication", options =>
+    {
+        options.Realm = "SilkierQuartz";
+        options.Events = new BasicEvents
+        {
+            OnValidateCredentials = context =>
+            {
+                if (context.Username == "admin" && context.Password == "admin")
+                {
+                    var claims = new[]
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer),
+                        new Claim(ClaimTypes.Name, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer)
+                    };
+                    context.Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, context.Scheme.Name));
+                    context.Success();
+                }
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+services.AddAuthorization(options =>
+{
+    options.AddPolicy(SilkierQuartzAuthenticationOptions.AuthorizationPolicyName, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+    });
+});
+
+services.AddSingleton(new SilkierQuartzAuthenticationOptions
+{
+    AccessRequirement = SilkierQuartzAuthenticationOptions.SimpleAccessRequirement.AllowOnlyAuthenticated
+});
+
+services.AddSingleton(new SilkierQuartzOptions()
+{
+    ProductName = "CRS Job Management",
+    EnableEditor = true,
+    VirtualPathRoot = string.Empty,
+    UseLocalTime = true,
+    DefaultDateFormat = "dd-MM-yyyy",
+    DefaultTimeFormat = "HH:mm:ss"
+});
+
 services.AddScoped<IAuthorizationHandler, SilkierQuartzDefaultAuthorizationHandler>();
 
 var app = builder.Build();
-
-app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
 var scheduler = await app.Services.GetRequiredService<ISchedulerFactory>().GetScheduler();
-app.UseSilkierQuartz(s => { s.Scheduler = scheduler; });
+app.UseSilkierQuartz(config =>
+{
+    config.Scheduler = scheduler;
+});
 
 app.Run();
