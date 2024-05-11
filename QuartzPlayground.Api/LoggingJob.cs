@@ -1,6 +1,6 @@
 ﻿using Quartz;
 
-namespace QuartzPlayground;
+namespace QuartzPlayground.Api;
 
 [DisallowConcurrentExecution]
 public class LoggingJob : IJob

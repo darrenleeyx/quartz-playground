@@ -1,7 +1,7 @@
 using AspNetCore.Authentication.Basic;
 using Microsoft.AspNetCore.Authorization;
 using Quartz;
-using QuartzPlayground;
+using QuartzPlayground.Api;
 using SilkierQuartz;
 using SilkierQuartz.Authorization;
 using System.Security.Claims;
@@ -71,7 +71,7 @@ services.AddSingleton(new SilkierQuartzAuthenticationOptions
 
 services.AddSingleton(new SilkierQuartzOptions()
 {
-    ProductName = "CRS Job Management",
+    ProductName = "Job Management - ", // SilkierQuartz will be appended by default
     EnableEditor = true,
     VirtualPathRoot = string.Empty,
     UseLocalTime = true,
